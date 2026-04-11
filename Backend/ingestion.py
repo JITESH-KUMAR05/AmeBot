@@ -15,7 +15,6 @@ from config import (
 # pages from where we get the data
 AMENIFY_PAGES = [
     {"url":"https://www.amenify.com", "title":"Home"},
-    {"url":"https://www.amenify.in", "title":"Home-india"},
     {"url":"https://www.amenify.com/resident-services", "title":"Resident-services"},
     {"url": "https://www.amenify.com/resident-protection-plan",        "title": "Resident-protection-plan"},
     {"url": "https://www.amenify.com/cleaningservices1", "title": "Cleaning-services"},
@@ -59,7 +58,7 @@ def scrape_page(url: str, title: str) -> dict | None:
 
         # filtering out the very short lines ie maybe the button text 
 
-        lines = [line for line in text.split("\n") if len(line.strip() > 30)]
+        lines = [line for line in text.split("\n") if len(line.strip()) > 30]
 
         clean_text = "\n".join(lines)
 
@@ -140,7 +139,66 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
         end = start + chunk_size
         chunk = " ".join(words[start:end])
 
-        if(len(words[start:end]) > 50):
+        if(len(words[start:end]) > 25):
             chunks.append(chunk)
         start += chunk_size - overlap
     return chunks
+
+def build_chunks(documents: list[dict]) -> list[dict]:
+    """
+    conver raw documents into searchable chunks
+
+     Output format:
+    [
+      {
+        "text": "Amenify provides cleaning services...",
+        "source": "Resident-services",
+        "url": "https://www.amenify.com/resident-services,
+        "chunk_id": 0
+      },
+      ...
+    ]
+    """
+    all_chunks = []
+    chunk_id = 0
+    for doc in documents:
+        text_chunks = chunk_text(doc["content"])
+        print(f"{doc['title']} : {len(text_chunks)} chunks")
+
+        for chunk in text_chunks:
+            all_chunks.append({
+                "text": chunk,
+                "source": doc["title"],
+                "url": doc.get("url", ""),
+                "chunk_id": chunk_id
+            })
+            chunk_id += 1
+    print(f"All chunks build {len(all_chunks)}")
+    return all_chunks
+
+def run_ingestion() -> list[dict]:
+    """
+    Full pipeline:
+    load documents -> build chunks -> return for embedding
+
+    This function will only be called once at the app startup
+    the build chunks will be passed to the vector_store.py for embeddings
+    """
+    print("\n"+ "=" * 50)
+    print("Running the ingestion pipeline")
+    print("="*50)
+    
+    documents = load_raw_documents()
+    chunks = build_chunks(documents)
+
+    print("="*50 + "\n")
+
+    return chunks
+
+
+# Running directly for testing
+if __name__ == "__main__":
+    chunks = run_ingestion()
+    print("\nSample chunk \n" + "-"*50 )
+    print(chunks[0]["text"][:300] if chunks else "No chunks generated")
+    print(f"\nTotal chunks: {len(chunks)}")
