@@ -18,7 +18,7 @@ class chatResponse(BaseModel):
     found_in_kb : True if answer came from the knowledge base , False if "I don't know"
     """
     answer : str
-    sesstion_id: str
+    session_id: str
     sources : list[str]
     found_in_kb : bool
 

@@ -1,0 +1,144 @@
+/* ================================================
+   style.css
+   Component-level styles for AmeBot chat UI.
+   amenify-theme.css handles tokens + base styles.
+   This file handles layout + chat-specific rules.
+   ================================================ */
+
+
+/* ── APP SHELL ───────────────────────────────────
+   Full viewport height, flex column.
+   Nothing scrolls except .am-chat-window.
+   Same pattern as WhatsApp Web, ChatGPT, Slack.
+─────────────────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;        /* dvh = dynamic viewport height (mobile safe) */
+  overflow: hidden;      /* prevent body scroll — only chat window scrolls */
+  max-width: 860px;      /* cap width on large screens */
+  margin: 0 auto;        /* center on widescreen */
+  background: var(--am-bg);
+  box-shadow: 0 0 0 1px var(--am-border); /* subtle border on widescreen */
+}
+
+
+/* ── BUBBLE CONTENT — formatted text ────────────
+   The bot returns plain text with newlines and
+   markdown-style bullet lists. app.js formats
+   these into HTML. These styles render them cleanly.
+─────────────────────────────────────────────────── */
+.bubble-content p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.bubble-content p + p {
+  margin-top: 0.4rem;
+}
+
+.bubble-content ul {
+  padding-left: 1.2rem;
+  margin: 0.375rem 0;
+  list-style: disc;
+}
+
+.bubble-content ul li {
+  margin: 0.2rem 0;
+  line-height: 1.55;
+}
+
+.bubble-content br {
+  display: block;
+  content: "";
+  margin-top: 0.25rem;
+}
+
+
+/* ── SOURCE TAGS ─────────────────────────────────
+   Small tags below bot bubbles showing which
+   KB documents were used to answer.
+   Shows transparency — important for a RAG bot.
+─────────────────────────────────────────────────── */
+.bubble-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.source-tag {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--am-blue);
+  background: var(--am-blue-faint);
+  border: 1px solid var(--am-blue-border);
+  border-radius: var(--am-radius-pill);
+  padding: 0.15rem 0.55rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+
+/* ── TIMESTAMP ───────────────────────────────────
+   Tiny timestamp shown below each message.
+─────────────────────────────────────────────────── */
+.msg-time {
+  font-size: 0.68rem;
+  color: var(--am-text-faint);
+  margin-top: 0.25rem;
+  padding: 0 0.25rem;
+}
+
+.am-message-row.user .msg-time {
+  text-align: right;
+}
+
+
+/* ── MESSAGE GROUP ───────────────────────────────
+   Wrapper for bubble + sources + timestamp.
+   Keeps them visually tied together.
+─────────────────────────────────────────────────── */
+.msg-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.am-message-row.user .msg-group {
+  align-items: flex-end;
+}
+
+.am-message-row.bot .msg-group {
+  align-items: flex-start;
+}
+
+
+/* ── EMPTY STATE (after clear) ───────────────────
+   Fade in the welcome screen smoothly.
+─────────────────────────────────────────────────── */
+.am-welcome {
+  animation: am-fade-in 250ms ease;
+}
+
+
+/* ── SCROLL ANCHOR ───────────────────────────────
+   Invisible div at bottom of chat window.
+   We scroll this into view to auto-scroll.
+─────────────────────────────────────────────────── */
+#scroll-anchor {
+  height: 1px;
+  flex-shrink: 0;
+}
+
+
+/* ── RESPONSIVE TWEAKS ───────────────────────────
+   amenify-theme.css handles mobile base.
+   These are chat-layout specific overrides.
+─────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .app-shell { box-shadow: none; }
+
+  .source-tag { font-size: 0.65rem; }
+
+  .bubble-content ul { padding-left: 1rem; }
+}

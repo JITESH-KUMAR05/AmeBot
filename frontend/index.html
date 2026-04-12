@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amenify Support Bot</title>
+
+  <!-- Google Fonts — Inter (same font family Amenify uses) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Theme first (tokens + base) → then component styles -->
+  <link rel="stylesheet" href="amenify-theme.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── ROOT LAYOUT ───────────────────────────────────
+       Everything is a flex column that fills the viewport.
+       No scroll on body — only the chat window scrolls.
+  ───────────────────────────────────────────────────── -->
+  <div class="app-shell">
+
+    <!-- ── ANNOUNCEMENT BAR ──────────────────────────── -->
+    <div class="am-bar" id="top-bar">
+      Proudly serving since 2017 · Call or text us at
+      <a href="tel:+17197671963">+1-719-767-1963</a>
+    </div>
+
+    <!-- ── HEADER ────────────────────────────────────── -->
+    <header class="am-header">
+
+      <div class="am-header-left">
+        <!-- Logo icon -->
+        <div class="am-logo" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+               stroke="white" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/>
+            <path d="M9 21V12h6v9"/>
+          </svg>
+        </div>
+
+        <!-- Brand info -->
+        <div>
+          <div class="am-brand-name">Amenify Support</div>
+          <div class="am-brand-sub">
+            <span class="am-status-dot" aria-hidden="true"></span>
+            AI-powered · Always available
+          </div>
+        </div>
+      </div>
+
+      <div class="am-header-right">
+        <!-- Clear chat -->
+        <button class="am-icon-btn" id="clear-btn"
+                title="Clear conversation"
+                aria-label="Clear conversation">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14H6L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+      </div>
+
+    </header>
+
+    <!-- ── CHAT WINDOW ────────────────────────────────── -->
+    <main class="am-chat-window" id="chat-window"
+          role="log" aria-live="polite" aria-label="Chat messages">
+
+      <!-- Welcome screen — removed after first message -->
+      <div class="am-welcome" id="welcome-screen">
+        <div class="am-welcome-icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+               stroke="white" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <h2 class="am-welcome-title">How can I help you today?</h2>
+        <p class="am-welcome-sub">
+          Ask me anything about Amenify's services, pricing, or how to get started.
+        </p>
+        <div class="am-chips" role="list">
+          <button class="am-chip" role="listitem"
+                  onclick="App.sendSuggestion(this)">
+            What services do you offer?
+          </button>
+          <button class="am-chip" role="listitem"
+                  onclick="App.sendSuggestion(this)">
+            How do I book a cleaning?
+          </button>
+          <button class="am-chip" role="listitem"
+                  onclick="App.sendSuggestion(this)">
+            Is Amenify available in my city?
+          </button>
+          <button class="am-chip" role="listitem"
+                  onclick="App.sendSuggestion(this)">
+            How do I contact support?
+          </button>
+          <button class="am-chip" role="listitem"
+                  onclick="App.sendSuggestion(this)">
+            What is the Resident Protection Plan?
+          </button>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ── INPUT AREA ─────────────────────────────────── -->
+    <footer class="am-input-area">
+      <div class="am-input-row">
+        <textarea
+          class="am-input"
+          id="user-input"
+          placeholder="Ask about Amenify services..."
+          rows="1"
+          aria-label="Type your message"
+          autocomplete="off"
+          spellcheck="true"
+        ></textarea>
+        <button class="am-send-btn" id="send-btn"
+                aria-label="Send message"
+                title="Send (Enter)">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+      <p class="am-input-hint">
+        Press <kbd>Enter</kbd> to send &nbsp;·&nbsp;
+        <kbd>Shift + Enter</kbd> for new line
+      </p>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
