@@ -1,5 +1,10 @@
-.venv/
+
 .env
-.env.example
+.venv/
+venv/
 __pycache__/
-req.http
+*.pyc
+*.pyo
+.pytest_cache/
+data/faiss_index/
+*.bin
