@@ -1,4 +1,4 @@
-from typing import override
+# from typing import override
 import os
 from dotenv import load_dotenv
 
