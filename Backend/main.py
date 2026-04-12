@@ -60,7 +60,6 @@ app.add_middleware(
 )
 
 
-
 # get /health for health check
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
