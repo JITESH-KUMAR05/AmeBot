@@ -26,7 +26,12 @@ async def lifespan(app: FastAPI):
         print(f"faiss index loaded successfully! total chunks: {get_total_chunks()}")
     except FileNotFoundError:
         print("faiss index not found.")
-        raise
+        from ingestion import run_ingestion
+        from vector_store import get_or_build_index
+        chunks = run_ingestion()
+        get_or_build_index(chunks)
+        load_index()
+        print(f"faiss index built and loaded successfully! total chunks: {get_total_chunks()}")
 
     print("\n"+ "="*50)
     print("Amenify Support Bot is ready to serve!")
