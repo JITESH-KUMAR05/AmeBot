@@ -1,0 +1,5 @@
+# Root-level requirements.txt — redirects Oryx to the actual file in Backend/.
+# Azure App Service's Oryx build engine looks for requirements.txt at the repo
+# root. Without this file Oryx skips pip install entirely and the app has no
+# packages installed when it starts.
+-r Backend/requirements.txt
