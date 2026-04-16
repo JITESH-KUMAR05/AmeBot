@@ -220,7 +220,13 @@ function formatText(text) {
         }
     }
     if (inList) html += '</ul>';
+    // Step 3: format for **something**, *something*, # something
+    html = html
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')  // **bold**
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')            // *italic*
+        .replace(/# (.+)/g, '<h3>$1</h3>');              // # header
 
+    
     return html;
 }
 
