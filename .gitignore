@@ -8,3 +8,9 @@ __pycache__/
 .pytest_cache/
 data/faiss_index/
 *.bin
+
+# test / tooling
+htmlcov/
+.coverage
+uv-cache/
+.ruff_cache/
