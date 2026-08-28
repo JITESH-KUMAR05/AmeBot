@@ -9,18 +9,21 @@ import os
 
 import pytest
 
-_STUB = {
-    "test-key",
-    "https://test.openai.azure.com/",
-    "test-gpt",
-    "text-embedding-ada-002",  # conftest stub value for the embedding model
-}
-_REQUIRED = [
-    "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT",
-    "AZURE_OPENAI_DEPLOYMENT_NAME", "AZURE_OPENAI_API_VERSION",
-    "AZURE_EMBEDDING_MODEL",
-]
-_have_creds = all(os.getenv(k) and os.getenv(k) not in _STUB for k in _REQUIRED)
+# Backend/.env is loaded by conftest's pytest_configure hook when (and only when)
+# the run is `pytest -m live` — early enough that app modules imported during
+# collection pick up the real credentials.
+
+# Discriminate real creds from the conftest stubs on the key + endpoint only
+# (the embedding-model / api-version values are not reliably distinctive —
+# "text-embedding-ada-002" is both the stub AND a common real deployment name).
+_STUB_KEY = "test-key"
+_STUB_ENDPOINT = "https://test.openai.azure.com/"
+_have_creds = (
+    bool(os.getenv("AZURE_OPENAI_API_KEY"))
+    and os.getenv("AZURE_OPENAI_API_KEY") != _STUB_KEY
+    and bool(os.getenv("AZURE_OPENAI_ENDPOINT"))
+    and os.getenv("AZURE_OPENAI_ENDPOINT") != _STUB_ENDPOINT
+)
 
 pytestmark = [
     pytest.mark.live,

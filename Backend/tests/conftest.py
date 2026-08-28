@@ -2,6 +2,7 @@
 BEFORE anything imports `config` (which raises if they are missing)."""
 import os
 
+os.environ.setdefault("AMEBOT_SKIP_DOTENV", "1")  # never read Backend/.env in the offline suite
 os.environ.setdefault("AZURE_OPENAI_API_KEY", "test-key")
 os.environ.setdefault("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com/")
 os.environ.setdefault("AZURE_OPENAI_DEPLOYMENT_NAME", "test-gpt")
@@ -151,11 +152,26 @@ def _reset_sessions():
     session._sessions.clear()
 
 
+def _wants_live(config) -> bool:
+    markexpr = (config.getoption("markexpr", default="") or "").strip()
+    return markexpr == "live" or ("live" in markexpr and "not" not in markexpr)
+
+
+def pytest_configure(config):
+    """For `pytest -m live` only: load Backend/.env now — before test modules are
+    collected (and import the app with the conftest stub creds)."""
+    if _wants_live(config):
+        from pathlib import Path
+
+        from dotenv import load_dotenv
+
+        load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
+
+
 def pytest_collection_modifyitems(config, items):
     """Skip @pytest.mark.live tests unless the run explicitly asks for them
     (`pytest -m live`). test_live.py also self-skips when real creds are absent."""
-    markexpr = config.getoption("markexpr", default="") or ""
-    if "live" in markexpr:
+    if _wants_live(config):
         return
     skip_live = pytest.mark.skip(reason="live test — run with: pytest -m live")
     for item in items:
