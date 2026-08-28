@@ -26,7 +26,9 @@ class JsonFormatter(logging.Formatter):
                 payload[key] = getattr(record, key)
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)
-        return json.dumps(payload, ensure_ascii=False)
+        # ensure_ascii=True: the line is pure ASCII, so it can never raise
+        # UnicodeEncodeError on a non-UTF-8 stdout (Windows cp1252, odd locales).
+        return json.dumps(payload, ensure_ascii=True)
 
 
 def configure_logging(level: str = "INFO") -> None:
