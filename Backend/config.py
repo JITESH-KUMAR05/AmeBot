@@ -17,6 +17,9 @@ CHUNK_OVERLAP = 50  # max token overlap between chunks
 TOP_K = 4  # number of chunks to retrieve
 MIN_SIMILARITY_SCORE = 0.70  # minimum similarity score to consider a chunk relevant otherwise response I don't know
 
+# API behaviour
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")  # "*" or comma-separated origins
+
 # Session history setting
 MAX_HISTORY = 10  # max number of messages to keep in history
 MAX_SESSIONS = 5000  # soft cap on in-memory sessions; least-recently-used evicted first

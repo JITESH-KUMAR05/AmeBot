@@ -11,6 +11,7 @@ import os
 from models import chatResponse,chatRequest, HealthResponse
 from chat import chat as process_chat
 from retriever import load_index, is_loaded, get_total_chunks
+from config import ALLOWED_ORIGINS
 
 # we will use lifespan instead of @app.on_event("startup") to load the index
 @asynccontextmanager
@@ -59,10 +60,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# cors
+# cors — origins from ALLOWED_ORIGINS ("*" default, so no behaviour change
+# on the live site; set a comma-separated list to lock it down)
+_allow_origins = ["*"] if ALLOWED_ORIGINS.strip() == "*" else [
+    o.strip() for o in ALLOWED_ORIGINS.split(",") if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=False,
@@ -77,7 +82,7 @@ async def health_check():
     """
     loaded = is_loaded()
     return HealthResponse(
-        status="ok" if loaded else "discarded",
+        status="ok" if loaded else "degraded",
         index_loaded=loaded,
         total_chunks=get_total_chunks() if loaded else 0
     )
@@ -103,7 +108,16 @@ async def chat_endpoint(request: chatRequest):
         print(f"Error processing chat: {e}")
         raise HTTPException(status_code=500, detail="An error occurred while processing the chat.")
 
-# entry point 
+
+# Mount static frontend LAST — after all API routes are registered, but
+# still at module scope (NOT after the __main__ guard, where it only ran
+# by luck of uvicorn re-importing "main:app"). StaticFiles handles GET/HEAD
+# only; mounting at "/" before the API routes would shadow POST /chat.
+frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
+app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+
+
+# entry point
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
@@ -112,9 +126,3 @@ if __name__ == "__main__":
         port=8000,
         reload=True,
     )
-
-# Mount static frontend LAST — after all API routes are registered.
-# StaticFiles only handles GET/HEAD; mounting at "/" before API routes
-# would intercept POST /chat and return 405 Method Not Allowed.
-frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
-app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
