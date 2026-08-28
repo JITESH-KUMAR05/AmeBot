@@ -1,7 +1,7 @@
 # main entry point
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +11,7 @@ import os
 from models import chatResponse,chatRequest, HealthResponse
 from chat import chat as process_chat
 from retriever import load_index, is_loaded, get_total_chunks
+from session import clear_session
 from config import ALLOWED_ORIGINS
 
 # we will use lifespan instead of @app.on_event("startup") to load the index
@@ -107,6 +108,13 @@ async def chat_endpoint(request: chatRequest):
     except Exception as e:
         print(f"Error processing chat: {e}")
         raise HTTPException(status_code=500, detail="An error occurred while processing the chat.")
+
+
+@app.delete("/session/{session_id}", status_code=204)
+async def delete_session(session_id: str):
+    """Drop a session's in-memory history. Idempotent — unknown ids also 204."""
+    clear_session(session_id)
+    return Response(status_code=204)
 
 
 # Mount static frontend LAST — after all API routes are registered, but

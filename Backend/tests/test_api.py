@@ -33,6 +33,21 @@ def test_chat_whitespace_message_returns_fallback(client):
     assert r.json()["found_in_kb"] is False
 
 
+def test_delete_session_clears_history(client):
+    import session
+    r1 = client.post("/chat", json={"message": "who founded Amenify", "session_id": None})
+    sid = r1.json()["session_id"]
+    assert session.session_exists(sid) is True
+
+    r2 = client.delete(f"/session/{sid}")
+    assert r2.status_code == 204
+    assert session.session_exists(sid) is False
+
+
+def test_delete_unknown_session_is_204(client):
+    assert client.delete("/session/does-not-exist").status_code == 204
+
+
 def test_health_degraded_when_index_missing(monkeypatch):
     import main
     import retriever

@@ -300,6 +300,13 @@ function clearChat() {
     // Remove all message rows (scroll anchor stays)
     chatWindow.querySelectorAll('.am-message-row').forEach(r => r.remove());
 
+    // Tell the backend to drop the old session's history (best-effort —
+    // ignore network/HTTP errors, the client reset below is what matters).
+    if (session_id) {
+        fetch(`${apiBaseUrl}/session/${encodeURIComponent(session_id)}`, { method: 'DELETE' })
+            .catch(() => {});
+    }
+
     // Reset session — backend creates a new one on next message
     session_id = null;
 
