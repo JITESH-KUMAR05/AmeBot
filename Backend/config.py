@@ -19,6 +19,7 @@ MIN_SIMILARITY_SCORE = 0.70  # minimum similarity score to consider a chunk rele
 
 # Session history setting
 MAX_HISTORY = 10  # max number of messages to keep in history
+MAX_SESSIONS = 5000  # soft cap on in-memory sessions; least-recently-used evicted first
 
 # Data paths
 MANUAL_DATA_PATH = "data/amenify_manual.json"

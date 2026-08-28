@@ -1,48 +1,51 @@
-# session management 
-# last 10 messages 
-# keeping in in memory right now 
-# later at scale we can go with Redis for persistance amd sharing across multiple servers
+# In-memory session history.
+#   - last MAX_HISTORY messages per session
+#   - at most MAX_SESSIONS sessions; the least-recently-used is evicted first
+#   - a plain OrderedDict (NOT defaultdict): reading an unknown id must not
+#     create it, otherwise a client sending random session_ids grows memory
+#     without bound.
+# At scale this is the piece to replace with Redis for persistence + sharing.
 
 import uuid
-from collections import defaultdict
-from config import MAX_HISTORY
+from collections import OrderedDict
 
-_sessions: dict[str, list[dict]] = defaultdict(list)
+from config import MAX_HISTORY, MAX_SESSIONS
+
+_sessions: "OrderedDict[str, list[dict]]" = OrderedDict()
+
 
 def create_session() -> str:
-    """
-    creates a new session id 
-    """
+    """Return a fresh session id. The entry is created lazily on first add_message."""
     return str(uuid.uuid4())
 
+
 def get_history(session_id: str) -> list[dict]:
-    """
-    returns the full chat history for a session
-    returns  an empty list if the session is not started yet
-    Format : [{"role":"user", "content":"..."}, {"role":"assistant", "content":"..."}]
-    """
-    return list(_sessions[session_id]) ## returning a copy not the reference 
+    """Return a COPY of the session's history, or [] if the session is unknown.
+    Does not create the session."""
+    return list(_sessions.get(session_id, []))
 
-def add_message(session_id: str, role:str, content:str) -> None:
-    """
-    Append a message to the session history
-    """
 
-    _sessions[session_id].append({"role": role, "content": content})
+def add_message(session_id: str, role: str, content: str) -> None:
+    """Append a message, creating the session if needed, evicting the oldest
+    session when over capacity, and trimming history to MAX_HISTORY."""
+    history = _sessions.get(session_id)
+    if history is None:
+        while len(_sessions) >= MAX_SESSIONS:
+            _sessions.popitem(last=False)  # evict least-recently-used
+        history = []
+        _sessions[session_id] = history
 
-    # trim history to max_history
-    if len(_sessions[session_id]) > MAX_HISTORY:
-        _sessions[session_id] = _sessions[session_id][-MAX_HISTORY:]
+    history.append({"role": role, "content": content})
+    if len(history) > MAX_HISTORY:
+        del history[:-MAX_HISTORY]
+
+    _sessions.move_to_end(session_id)  # mark as most-recently-used
+
 
 def session_exists(session_id: str) -> bool:
-    """
-    check if session id is already in use
-    """
     return session_id in _sessions
 
+
 def clear_session(session_id: str) -> None:
-    """
-    clears the session history used for logout or reset functions
-    """
-    if session_id in _sessions:
-        del _sessions[session_id]
+    """Drop a session's history. Idempotent. Used by DELETE /session/{id}."""
+    _sessions.pop(session_id, None)
