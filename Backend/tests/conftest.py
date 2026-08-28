@@ -149,3 +149,15 @@ def _reset_sessions():
     session._sessions.clear()
     yield
     session._sessions.clear()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip @pytest.mark.live tests unless the run explicitly asks for them
+    (`pytest -m live`). test_live.py also self-skips when real creds are absent."""
+    markexpr = config.getoption("markexpr", default="") or ""
+    if "live" in markexpr:
+        return
+    skip_live = pytest.mark.skip(reason="live test — run with: pytest -m live")
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip_live)

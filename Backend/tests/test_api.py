@@ -99,3 +99,21 @@ def test_rate_limit_disabled_by_default(client):
     payload = {"message": "who founded Amenify", "session_id": None}
     for _ in range(6):
         assert client.post("/chat", json=payload).status_code == 200
+
+
+def test_chat_503_when_index_not_loaded(monkeypatch, mock_azure):
+    import main
+    import retriever
+    from starlette.testclient import TestClient
+
+    monkeypatch.setattr(main, "load_index", lambda: None)
+    monkeypatch.setattr(retriever, "_index", None)
+    monkeypatch.setattr(retriever, "_chunks", [])
+    with TestClient(main.app) as c:
+        r = c.post("/chat", json={"message": "hi", "session_id": None})
+    assert r.status_code == 503
+
+
+def test_chat_message_too_long_is_422(client):
+    r = client.post("/chat", json={"message": "x" * 1001, "session_id": None})
+    assert r.status_code == 422
