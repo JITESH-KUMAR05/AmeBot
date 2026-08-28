@@ -86,8 +86,8 @@ def _call_llm(messages: list[dict]) -> str:
             max_tokens=600,
         )
         return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"Error calling LLM: {e}")
+    except Exception:
+        log.exception("LLM call failed; returning fallback answer")
         return NO_ANSWER_RESPONSE
 
 
@@ -136,7 +136,7 @@ def _rewrite_query(message: str, history: list[dict]) -> str:
 
         if last_user_msg:
             rewritten = f"{message} {last_user_msg}"
-            print(f"[query rewrite] '{message}' → '{rewritten}'")
+            log.debug("query rewrite: %r -> %r", message, rewritten)
             return rewritten
 
     return message

@@ -83,7 +83,7 @@ def scrape_amenify() -> list[dict]:
             results.append(doc)
     
     # saving this so that we can just do it once and use it again
-    os.makedirs("data", exist_ok=True)
+    os.makedirs(os.path.dirname(SCRAPED_DATA_PATH), exist_ok=True)
     with open(SCRAPED_DATA_PATH, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
     

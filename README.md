@@ -21,7 +21,7 @@ Query Rewriter        — handles follow-ups like "who founded it?"
     ↓
 FAISS Vector Search   — semantic search over 19 KB chunks
     ↓
-Similarity Threshold  — score < 0.70 → "I don't know" (no LLM call)
+Similarity Threshold  — score < 0.75 → "I don't know" (no LLM call)
     ↓
 Azure OpenAI GPT      — answers from retrieved context only
     ↓
@@ -244,11 +244,15 @@ Three independent layers:
 **Layer 1 — Similarity threshold (retrieval gate)**
 
 ```python
-MIN_SIMILARITY_SCORE = 0.70
-# Score below this → return "I don't know" immediately, no LLM call
+MIN_SIMILARITY_SCORE = 0.75
+# Best chunk scores below this → return "I don't know" immediately, no LLM call
 ```
 
-The LLM is never called if the question doesn't match something in the knowledge base. This alone eliminates most hallucinations.
+If no retrieved chunk clears the threshold, the LLM is never called. The value
+matters: `text-embedding-ada-002` has a high similarity floor — measured on this
+KB, unrelated questions top out around **0.73** cosine while genuinely relevant
+ones score **0.80–0.94**. `0.75` sits in that gap. (An earlier `0.70` was below
+the floor and let junk queries through to Layer 2.)
 
 **Layer 2 — Strict system prompt**
 
