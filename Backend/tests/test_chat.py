@@ -45,3 +45,20 @@ def test_llm_error_falls_back(fake_index, mock_azure, low_threshold, monkeypatch
     result = chat.chat("who founded Amenify", None)
     assert result["answer"] == chat.NO_ANSWER_RESPONSE
     assert result["found_in_kb"] is True  # retrieval still succeeded
+
+
+def test_followup_turn_does_not_use_builtin_print(fake_index, mock_azure, low_threshold, monkeypatch):
+    """Regression: _rewrite_query used to print() a U+2192 arrow, which crashed
+    the follow-up path on a non-UTF-8 stdout. Nothing in the request path may
+    call the builtin print."""
+    import builtins
+
+    def no_print(*a, **k):
+        raise AssertionError("builtin print() called in the chat request path")
+
+    monkeypatch.setattr(builtins, "print", no_print)
+
+    sid = chat.chat("What is Amenify?", None)["session_id"]
+    out = chat.chat("who founded it?", sid)          # follow-up → triggers _rewrite_query
+    assert out["found_in_kb"] is True
+    assert out["session_id"] == sid
