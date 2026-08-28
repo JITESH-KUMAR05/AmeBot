@@ -6,7 +6,7 @@ import pytest
 def test_config_imports_with_stubbed_env():
     import config
     assert config.TOP_K == 4
-    assert config.MIN_SIMILARITY_SCORE == 0.70
+    assert config.MIN_SIMILARITY_SCORE == 0.75
 
 
 def test_missing_api_key_names_the_real_var(monkeypatch):
