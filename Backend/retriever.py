@@ -66,7 +66,10 @@ def _embed_query(query: str) -> np.ndarray:
         model=AZURE_EMBEDDING_MODEL,
     )
     vec = np.array(response.data[0].embedding, dtype=np.float32)
-    vec = vec / np.linalg.norm(vec)  # normalize the vector
+    norm = np.linalg.norm(vec)
+    if norm == 0:
+        raise ValueError("Query produced a zero-norm embedding vector")
+    vec = vec / norm  # normalize so inner product == cosine similarity
     return vec.reshape(1, -1)
 
 def retrieve(query: str) -> list[dict]:
@@ -80,9 +83,8 @@ def retrieve(query: str) -> list[dict]:
             "load_index() should be called at the startup definetly"
         )
     
-    # 1 embed and normalize    
+    # 1 embed and normalize (already shaped (1, dim) by _embed_query)
     query_vec = _embed_query(query)
-    query_vec = query_vec.reshape(1,-1)
 
     # 2 search
     scores, indices = _index.search(query_vec, TOP_K)
