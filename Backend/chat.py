@@ -157,6 +157,17 @@ def chat(message: str, session_id: str | None = None) -> dict:
     # 2. Clean input
     message = message.strip()
 
+    # 2b. Empty after trimming — pydantic's min_length=1 accepts "   ".
+    #     Bail out before we embed an empty string (Azure 400 / meaningless
+    #     search / zero-norm vector).
+    if not message:
+        return {
+            "answer": NO_ANSWER_RESPONSE,
+            "session_id": session_id,
+            "sources": [],
+            "found_in_kb": False,
+        }
+
     # 3. Fetch history BEFORE retrieval — needed for query rewriting
     history = get_history(session_id)
 

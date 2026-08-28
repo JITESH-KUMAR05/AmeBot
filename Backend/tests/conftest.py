@@ -118,7 +118,20 @@ def mock_azure(monkeypatch):
 
 
 @pytest.fixture
-def client(fake_index, mock_azure, monkeypatch):
+def low_threshold(monkeypatch):
+    """Lower MIN_SIMILARITY_SCORE for tests that assert a KB hit.
+
+    The fake bag-of-words embeddings cannot reproduce the topical clustering
+    that real ada-002 vectors have, so a realistic query/chunk pair scores
+    ~0.15-0.30 cosine, not >0.70. Tests that exercise the *retrieval hit*
+    path calibrate the gate down; tests that exercise the *miss* path use a
+    query with zero token overlap (which scores 0.0 regardless)."""
+    import retriever
+    monkeypatch.setattr(retriever, "MIN_SIMILARITY_SCORE", 0.05)
+
+
+@pytest.fixture
+def client(fake_index, mock_azure, low_threshold, monkeypatch):
     """TestClient with the fake index; lifespan load_index() is a no-op."""
     import main
     import retriever
