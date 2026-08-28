@@ -47,23 +47,31 @@ Response              — answer + source citations + session_id
 ```
 AmeBot/
 ├── Backend/
-│   ├── main.py          # FastAPI app, routes, lifespan
-│   ├── config.py        # Env variable loading and validation
-│   ├── ingestion.py     # Data loader + BeautifulSoup scraper + chunker
-│   ├── vector_store.py  # Embedding pipeline + FAISS index builder
-│   ├── retriever.py     # Semantic search (query → top-k chunks)
-│   ├── chat.py          # RAG pipeline (retrieve → prompt → LLM)
-│   ├── session.py       # Chat history manager (per session)
-│   ├── models.py        # Pydantic request/response models
+│   ├── main.py            # FastAPI app, routes, lifespan, rate limiter, static mount
+│   ├── config.py          # Env loading + fail-fast validation; all tunables
+│   ├── ingestion.py       # Data loader + BeautifulSoup scraper + word-based chunker
+│   ├── vector_store.py    # Embedding pipeline + FAISS index builder (CLI script)
+│   ├── retriever.py       # Semantic search (query → top-k chunks)
+│   ├── chat.py            # RAG pipeline (retrieve → prompt → LLM) + structured log
+│   ├── session.py         # In-memory chat history (OrderedDict, LRU-capped)
+│   ├── logging_config.py  # Stdlib JSON logging
+│   ├── models.py          # Pydantic request/response models
+│   ├── tests/             # pytest suite (offline + opt-in `-m live`)
+│   ├── .env.example
 │   └── data/
 │       ├── amenify_manual.json   # Hand-curated KB (19 documents)
 │       └── amenify_scraped.json  # Scraped fallback cache
-├── frontend/
+├── frontend/              # static vanilla-JS chat UI, served by the app
 │   ├── index.html
 │   ├── style.css
 │   ├── app.js
 │   └── amenify-theme.css
-├── requirements.txt
+├── docs/superpowers/       # design spec + implementation plan
+├── .github/workflows/      # deploy (main_amenify-support-bot.yml) + tests.yml
+├── pyproject.toml          # local dev/test deps (uv); deploy uses requirements.txt
+├── Dockerfile
+├── requirements.txt        # → Backend/requirements.txt (Azure Oryx entry point)
+├── CLAUDE.md
 └── README.md
 ```
 
@@ -83,7 +91,7 @@ pip install -r requirements.txt
 
 ### 2. Set up environment
 
-Create `Backend/.env`:
+Copy `Backend/.env.example` to `Backend/.env` and fill in your Azure values:
 
 ```env
 AZURE_OPENAI_API_KEY=your_key
@@ -92,6 +100,18 @@ AZURE_OPENAI_DEPLOYMENT_NAME=your_gpt_deployment
 AZURE_OPENAI_API_VERSION=2024-02-01
 AZURE_EMBEDDING_MODEL=text-embedding-ada-002
 ```
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `AZURE_OPENAI_API_KEY` | yes | — | Azure OpenAI key |
+| `AZURE_OPENAI_ENDPOINT` | yes | — | `https://<resource>.openai.azure.com/` |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | yes | — | GPT deployment name |
+| `AZURE_OPENAI_API_VERSION` | yes | — | e.g. `2024-02-01` |
+| `AZURE_EMBEDDING_MODEL` | yes | — | e.g. `text-embedding-ada-002` |
+| `RATE_LIMIT` | no | `20/minute` | Per-IP `/chat` limit; `""` disables. Needs `slowapi` installed. |
+| `ALLOWED_ORIGINS` | no | `*` | CORS origins (`*` or comma-separated list) |
+| `LOG_LEVEL` | no | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` |
+| `LOG_QUERY_TEXT` | no | `false` | Log the raw user message (PII — off by default) |
 
 ### 3. Build the FAISS index
 
@@ -110,6 +130,43 @@ python main.py
 - Chat UI: http://localhost:8000
 - API docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
+
+---
+
+## Running the tests
+
+Tests use [`uv`](https://docs.astral.sh/uv/). The offline suite needs no API
+key and no network — Azure calls are mocked and the FAISS index is built
+in-memory from a handful of canned chunks.
+
+```bash
+uv sync --group dev
+uv run pytest                 # offline suite (mocked Azure, in-memory FAISS)
+uv run pytest -m live         # ALSO hit real Azure — needs the AZURE_OPENAI_* vars
+uv run pytest --cov=Backend   # with coverage
+```
+
+`Backend/requirements.txt` stays the source of truth for the Azure deploy;
+`pyproject.toml` + `uv.lock` are for local dev only. If you change a runtime
+dependency, update both (regenerate the pin list with
+`uv export --no-hashes --no-dev`).
+
+CI runs the offline suite on every push/PR via `.github/workflows/tests.yml`
+(separate from the Azure deploy workflow).
+
+---
+
+## Run with Docker
+
+```bash
+cp Backend/.env.example Backend/.env   # then fill in your Azure keys
+docker build -t amebot .
+docker run --rm -p 8000:8000 --env-file Backend/.env amebot
+```
+
+The container runs from `Backend/` and serves the frontend from `../frontend`.
+It installs `Backend/requirements.txt` plus `slowapi`, so rate limiting is
+active. This is a portable/local path only — Azure App Service builds via Oryx.
 
 ---
 
@@ -141,6 +198,22 @@ Pass `session_id` back on subsequent requests to maintain conversation history.
 { "status": "ok", "index_loaded": true, "total_chunks": 19 }
 ```
 
+`status` is `"degraded"` (not `"ok"`) when the index failed to load.
+
+### DELETE /session/{session_id}
+
+Clears a session's in-memory history. Returns `204` — idempotent, so an
+unknown id also returns `204`. The frontend "clear conversation" button
+calls this before starting a fresh session.
+
+### Rate limiting
+
+`POST /chat` is limited per client IP (default **20/minute**, from the
+`RATE_LIMIT` env var; set it empty to disable). Over the limit returns `429`
+with `{"detail": "..."}`. Behind Azure's reverse proxy the limiter keys on
+the first `X-Forwarded-For` hop. Rate limiting requires `slowapi`, which is
+an optional dependency — where it is not installed, the limit is a no-op.
+
 ---
 
 ## Section 3: Reasoning & Design
@@ -155,9 +228,10 @@ I used a two-source approach:
 **Processing pipeline:**
 1. Fetch pages with `requests`, parse with `BeautifulSoup`
 2. Strip noise tags (`<script>`, `<nav>`, `<footer>`)
-3. Filter out short lines (< 25 chars) — removes nav links, button text
-4. Split into ~500 token chunks with 50-token overlap
-5. Tag each chunk with `{text, source, url}`
+3. Filter out lines shorter than 30 characters — removes nav links, button text
+4. Split into ~500-**word** chunks with 50-word overlap (roughly 350–600 tokens
+   for English prose; a trailing chunk of ≤25 words is dropped)
+5. Tag each chunk with `{text, source, url, chunk_id}`
 6. Embed with `text-embedding-ada-002` → store in FAISS `IndexFlatIP`
 7. Normalize vectors to unit length so inner product equals cosine similarity
 
@@ -197,13 +271,15 @@ temperature=0  # deterministic output, no creative fabrication
 
 | Limitation | Notes |
 |---|---|
-| In-memory sessions | Chat history lost on server restart |
+| In-memory sessions | Chat history lost on server restart; capped at 5000 sessions (LRU-evicted) |
 | Static knowledge base | Doesn't reflect new Amenify updates automatically |
 | Single FAISS instance | Can't scale horizontally — instances don't share the index |
 | No pricing data | Amenify doesn't publish fixed prices, so the bot can't answer pricing questions |
 | Scraper fragility | If Amenify redesigns their site, the scraper needs updating |
-| No rate limiting | Any user can hit the API without limits |
-| Fixed chunk size | Answers spanning multiple chunks may be partially missed |
+| Fixed 500-word chunks | Answers spanning multiple chunks may be partially missed |
+
+> Rate limiting was on this list; it's now implemented (`RATE_LIMIT`, per-IP,
+> via the optional `slowapi` dependency). See the API section.
 
 ---
 
