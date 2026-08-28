@@ -19,6 +19,7 @@ MIN_SIMILARITY_SCORE = 0.70  # minimum similarity score to consider a chunk rele
 
 # API behaviour
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")  # "*" or comma-separated origins
+RATE_LIMIT = os.getenv("RATE_LIMIT", "20/minute")  # per client IP on /chat; "" disables
 
 # Session history setting
 MAX_HISTORY = 10  # max number of messages to keep in history

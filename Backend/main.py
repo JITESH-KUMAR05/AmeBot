@@ -1,18 +1,21 @@
 # main entry point
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import os
 
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from models import chatResponse,chatRequest, HealthResponse
 from chat import chat as process_chat
 from retriever import load_index, is_loaded, get_total_chunks
 from session import clear_session
-from config import ALLOWED_ORIGINS
+from config import ALLOWED_ORIGINS, RATE_LIMIT
 
 # we will use lifespan instead of @app.on_event("startup") to load the index
 @asynccontextmanager
@@ -61,6 +64,31 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+
+# rate limiting — per client IP on /chat.
+# Azure App Service runs the app behind a reverse proxy, so request.client.host
+# is the proxy; key on the first X-Forwarded-For hop instead when present.
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+_rate_enabled = RATE_LIMIT.strip() != ""
+_effective_rate_limit = RATE_LIMIT.strip() or "1000000/minute"
+limiter = Limiter(key_func=_client_ip, enabled=_rate_enabled)
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please slow down and try again shortly."},
+    )
+
+
 # cors — origins from ALLOWED_ORIGINS ("*" default, so no behaviour change
 # on the live site; set a comma-separated list to lock it down)
 _allow_origins = ["*"] if ALLOWED_ORIGINS.strip() == "*" else [
@@ -89,14 +117,15 @@ async def health_check():
     )
 
 @app.post("/chat", response_model=chatResponse)
-async def chat_endpoint(request: chatRequest):
+@limiter.limit(_effective_rate_limit)
+async def chat_endpoint(request: Request, body: chatRequest):
 
     if not is_loaded():
         raise HTTPException(status_code=503, detail="Index not loaded yet. Please try again later.")
     try:
         result = process_chat(
-            message=request.message,
-            session_id=request.session_id,
+            message=body.message,
+            session_id=body.session_id,
         )
 
         return chatResponse(
