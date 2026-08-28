@@ -7,9 +7,18 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import os
 
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
+# slowapi powers per-IP rate limiting. It is an OPTIONAL dependency: it is in
+# the local dev/test env (pyproject.toml) but NOT in Backend/requirements.txt,
+# the Azure Oryx deploy lockfile. Where it is absent, rate limiting is a no-op
+# and the app runs exactly as before. To enable it in production, add
+# `slowapi` to Backend/requirements.txt and redeploy.
+try:
+    from slowapi import Limiter
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.util import get_remote_address
+    _SLOWAPI_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised only in the slim deploy env
+    _SLOWAPI_AVAILABLE = False
 
 from models import chatResponse,chatRequest, HealthResponse
 from chat import chat as process_chat
@@ -68,25 +77,34 @@ app = FastAPI(
 # rate limiting — per client IP on /chat.
 # Azure App Service runs the app behind a reverse proxy, so request.client.host
 # is the proxy; key on the first X-Forwarded-For hop instead when present.
-def _client_ip(request: Request) -> str:
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
-    return get_remote_address(request)
-
-
-_rate_enabled = RATE_LIMIT.strip() != ""
 _effective_rate_limit = RATE_LIMIT.strip() or "1000000/minute"
-limiter = Limiter(key_func=_client_ip, enabled=_rate_enabled)
-app.state.limiter = limiter
+
+if _SLOWAPI_AVAILABLE:
+    def _client_ip(request: Request) -> str:
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            return xff.split(",")[0].strip()
+        return get_remote_address(request)
+
+    limiter = Limiter(key_func=_client_ip, enabled=RATE_LIMIT.strip() != "")
+    app.state.limiter = limiter
+
+    @app.exception_handler(RateLimitExceeded)
+    async def _rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded. Please slow down and try again shortly."},
+        )
+else:  # pragma: no cover - slim deploy env only
+    limiter = None
 
 
-@app.exception_handler(RateLimitExceeded)
-async def _rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Rate limit exceeded. Please slow down and try again shortly."},
-    )
+def _rate_limited(func):
+    """Apply the slowapi limit to a route, or return it unchanged when slowapi
+    is not installed (the Azure deploy env)."""
+    if _SLOWAPI_AVAILABLE:
+        return limiter.limit(_effective_rate_limit)(func)
+    return func
 
 
 # cors — origins from ALLOWED_ORIGINS ("*" default, so no behaviour change
@@ -117,7 +135,7 @@ async def health_check():
     )
 
 @app.post("/chat", response_model=chatResponse)
-@limiter.limit(_effective_rate_limit)
+@_rate_limited
 async def chat_endpoint(request: Request, body: chatRequest):
 
     if not is_loaded():
