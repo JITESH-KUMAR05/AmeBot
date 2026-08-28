@@ -21,6 +21,10 @@ MIN_SIMILARITY_SCORE = 0.70  # minimum similarity score to consider a chunk rele
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")  # "*" or comma-separated origins
 RATE_LIMIT = os.getenv("RATE_LIMIT", "20/minute")  # per client IP on /chat; "" disables
 
+# Logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOG_QUERY_TEXT = os.getenv("LOG_QUERY_TEXT", "false").lower() == "true"  # off = no PII in logs
+
 # Session history setting
 MAX_HISTORY = 10  # max number of messages to keep in history
 MAX_SESSIONS = 5000  # soft cap on in-memory sessions; least-recently-used evicted first

@@ -16,6 +16,9 @@ from config import (
     MIN_SIMILARITY_SCORE,
     FAISS_INDEX_PATH
 )
+from logging_config import get_logger
+
+log = get_logger("amebot.retriever")
 
 _index : faiss.Index | None = None
 _chunks: list[dict] = []
@@ -41,7 +44,7 @@ def load_index() -> None:
     with open(chunks_file, "r",encoding="utf-8") as f:
         _chunks = json.load(f)
     
-    print(f"Retriever ready → {_index.ntotal} vectors | {len(_chunks)} chunks loaded")
+    log.info("retriever ready", extra={"n_chunks": len(_chunks)})
 
 def is_loaded() -> bool:
     """

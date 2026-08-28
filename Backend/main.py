@@ -24,41 +24,37 @@ from models import chatResponse,chatRequest, HealthResponse
 from chat import chat as process_chat
 from retriever import load_index, is_loaded, get_total_chunks
 from session import clear_session
-from config import ALLOWED_ORIGINS, RATE_LIMIT
+from config import ALLOWED_ORIGINS, RATE_LIMIT, LOG_LEVEL
+from logging_config import configure_logging, get_logger
+
+configure_logging(LOG_LEVEL)
+log = get_logger("amebot")
+
 
 # we will use lifespan instead of @app.on_event("startup") to load the index
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    print("\n"+ "="*50)
-    print("starting Amenify Support Bot...")
-    print("="*50 + "\n")
-
+    log.info("starting Amenify Support Bot")
     try:
-        print("loading faiss index...")
         load_index()
-        print(f"faiss index loaded successfully! total chunks: {get_total_chunks()}")
+        log.info("faiss index loaded", extra={"n_chunks": get_total_chunks()})
     except FileNotFoundError:
-        print("faiss index not found.")
+        log.warning("faiss index not found — building from scratch")
         try:
             from ingestion import run_ingestion
             from vector_store import get_or_build_index
             chunks = run_ingestion()
             get_or_build_index(chunks)
             load_index()
-            print(f"faiss index built and loaded successfully! total chunks: {get_total_chunks()}")
-        except Exception as build_err:
-            print(f"FATAL: Could not build faiss index: {build_err}")
+            log.info("faiss index built and loaded", extra={"n_chunks": get_total_chunks()})
+        except Exception:
+            log.exception("FATAL: could not build faiss index")
             raise
 
-    print("\n"+ "="*50)
-    print("Amenify Support Bot is ready to serve!")
-    print("="*50 + "\n")
+    log.info("Amenify Support Bot ready to serve")
     yield
-    # shutdown
-    print("\n"+ "="*50)
-    print("shutting down Amenify Support Bot...")
-    print("="*50 + "\n")
+    log.info("shutting down Amenify Support Bot")
 
 
 # app creation
@@ -152,8 +148,8 @@ async def chat_endpoint(request: Request, body: chatRequest):
             sources=result["sources"],
             found_in_kb=result["found_in_kb"]
         )
-    except Exception as e:
-        print(f"Error processing chat: {e}")
+    except Exception:
+        log.exception("chat endpoint failed")
         raise HTTPException(status_code=500, detail="An error occurred while processing the chat.")
 
 
