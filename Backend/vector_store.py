@@ -139,8 +139,7 @@ if __name__ == "__main__":
     # 1 get the chunks
     chunks = run_ingestion()
 
-    # 2 check rebuild
-    import shutil
+    # 2 check rebuild (shutil imported at module top)
     if os.path.exists(FAISS_INDEX_PATH):
         shutil.rmtree(FAISS_INDEX_PATH)
         print("cleared old index")

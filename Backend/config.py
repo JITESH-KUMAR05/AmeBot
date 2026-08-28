@@ -17,8 +17,17 @@ CHUNK_OVERLAP = 50  # max token overlap between chunks
 TOP_K = 4  # number of chunks to retrieve
 MIN_SIMILARITY_SCORE = 0.70  # minimum similarity score to consider a chunk relevant otherwise response I don't know
 
+# API behaviour
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")  # "*" or comma-separated origins
+RATE_LIMIT = os.getenv("RATE_LIMIT", "20/minute")  # per client IP on /chat; "" disables
+
+# Logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOG_QUERY_TEXT = os.getenv("LOG_QUERY_TEXT", "false").lower() == "true"  # off = no PII in logs
+
 # Session history setting
 MAX_HISTORY = 10  # max number of messages to keep in history
+MAX_SESSIONS = 5000  # soft cap on in-memory sessions; least-recently-used evicted first
 
 # Data paths
 MANUAL_DATA_PATH = "data/amenify_manual.json"
@@ -28,7 +37,7 @@ FAISS_INDEX_PATH = "data/faiss_index"  ## faiss saves as folder
 # if the required data and api is not there or missing then crash it
 
 _required = {
-    "AZURE_OPENAI_KEY": AZURE_OPENAI_API_KEY,
+    "AZURE_OPENAI_API_KEY": AZURE_OPENAI_API_KEY,
     "AZURE_OPENAI_ENDPOINT": AZURE_OPENAI_ENDPOINT,
     "AZURE_OPENAI_DEPLOYMENT_NAME": AZURE_OPENAI_DEPLOYMENT_NAME,
     "AZURE_OPENAI_API_VERSION": AZURE_OPENAI_API_VERSION,

@@ -128,8 +128,11 @@ def load_raw_documents() -> list[dict]:
 # Chunking 
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
-    """
-    Split text into overlapping chunks
+    """Split text into overlapping chunks.
+
+    NOTE: chunk_size / overlap are counted in WHITESPACE-SEPARATED WORDS,
+    not tokens. CHUNK_SIZE=500 words is roughly 350-600 BPE tokens for
+    English prose. A trailing chunk of 25 words or fewer is dropped.
     """
     words = text.split()
     chunks = []

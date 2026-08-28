@@ -9,17 +9,23 @@
 #   8. Save both turns to session history
 #   9. Return structured response
 
+import string
+import time
+
 from openai import AzureOpenAI
 from config import (
     AZURE_OPENAI_API_KEY,
     AZURE_OPENAI_ENDPOINT,
     AZURE_OPENAI_API_VERSION,
     AZURE_OPENAI_DEPLOYMENT_NAME,
-    MAX_HISTORY
+    MAX_HISTORY,
+    LOG_QUERY_TEXT,
 )
-
+from logging_config import get_logger
 from retriever import retrieve
 from session import create_session, get_history, add_message
+
+log = get_logger("amebot.chat")
 
 _client = AzureOpenAI(
     api_key=AZURE_OPENAI_API_KEY,
@@ -106,14 +112,18 @@ def _rewrite_query(message: str, history: list[dict]) -> str:
     The original message is still passed to the LLM so the conversation
     feels natural.
     """
-    # Pronouns and demonstratives that signal a follow-up question
-    FOLLOW_UP_WORDS = {
+    # Pronouns / demonstratives that signal a follow-up question.
+    # Both the set entries and the incoming tokens are stripped of
+    # surrounding punctuation so "it?", "it's" and "its" all match.
+    _RAW_FOLLOW_UP = {
         'it', 'its', 'they', 'their', 'them',
         'that', 'this', 'he', 'she', 'there',
-        'he\'s', 'she\'s', 'it\'s', 'they\'re',
+        "he's", "she's", "it's", "they're",
     }
+    _PUNCT = str.maketrans("", "", string.punctuation)
+    FOLLOW_UP_WORDS = {w.translate(_PUNCT) for w in _RAW_FOLLOW_UP}
 
-    words = set(message.lower().split())
+    words = {w.translate(_PUNCT) for w in message.lower().split()}
     is_follow_up = bool(words & FOLLOW_UP_WORDS)
 
     if is_follow_up and len(history) >= 1:
@@ -151,50 +161,69 @@ def chat(message: str, session_id: str | None = None) -> dict:
     # 2. Clean input
     message = message.strip()
 
-    # 3. Fetch history BEFORE retrieval — needed for query rewriting
-    history = get_history(session_id)
+    start = time.perf_counter()
+    chunks: list[dict] = []
+    search_query = message
 
-    # 4. Rewrite vague follow-up queries for better FAISS recall
-    #    e.g. "who founded it" → "who founded it What is Amenify?"
-    #    Only the search query is rewritten — the LLM still sees the original.
-    search_query = _rewrite_query(message, history)
+    if not message:
+        # 2b. Empty after trimming — pydantic's min_length=1 accepts "   ".
+        #     Bail out before we embed an empty string (Azure 400 / meaningless
+        #     search / zero-norm vector).
+        result = {"answer": NO_ANSWER_RESPONSE, "session_id": session_id,
+                  "sources": [], "found_in_kb": False}
+    else:
+        # 3. Fetch history BEFORE retrieval — needed for query rewriting
+        history = get_history(session_id)
 
-    # 5. Retrieve using the (possibly enriched) query
-    chunks = retrieve(search_query)
-    found_in_kb = len(chunks) > 0
+        # 4. Rewrite vague follow-up queries for better FAISS recall.
+        #    Only the search query is rewritten — the LLM still sees the original.
+        search_query = _rewrite_query(message, history)
 
-    # 6. Short-circuit — no relevant chunks found
-    if not found_in_kb:
-        add_message(session_id, "user", message)
-        add_message(session_id, "assistant", NO_ANSWER_RESPONSE)
-        return {
-            "answer": NO_ANSWER_RESPONSE,
-            "session_id": session_id,
-            "sources": [],
-            "found_in_kb": False,
-        }
+        # 5. Retrieve using the (possibly enriched) query
+        chunks = retrieve(search_query)
+        found_in_kb = len(chunks) > 0
 
-    # 7. Build context string from retrieved chunks
-    context = _build_context(chunks)
+        if not found_in_kb:
+            # 6. Short-circuit — no relevant chunks found (NO LLM call)
+            add_message(session_id, "user", message)
+            add_message(session_id, "assistant", NO_ANSWER_RESPONSE)
+            result = {"answer": NO_ANSWER_RESPONSE, "session_id": session_id,
+                      "sources": [], "found_in_kb": False}
+        else:
+            # 7. Build context string from retrieved chunks
+            context = _build_context(chunks)
 
-    # 8. Assemble messages for the LLM
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(context=context)},
-        *history,
-        {"role": "user", "content": message},
-    ]
+            # 8. Assemble messages for the LLM (original message, not rewritten)
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT.format(context=context)},
+                *history,
+                {"role": "user", "content": message},
+            ]
 
-    # 9. Call Azure OpenAI
-    answer = _call_llm(messages)
+            # 9. Call Azure OpenAI
+            answer = _call_llm(messages)
 
-    # 10. Persist both turns
-    add_message(session_id, "user", message)
-    add_message(session_id, "assistant", answer)
+            # 10. Persist both turns
+            add_message(session_id, "user", message)
+            add_message(session_id, "assistant", answer)
 
-    # 11. Return structured response
-    return {
-        "answer": answer,
+            result = {"answer": answer, "session_id": session_id,
+                      "sources": [c["source"] for c in chunks], "found_in_kb": True}
+
+    # 11. One structured record per request. Raw message text only when
+    #     LOG_QUERY_TEXT is enabled (default off — it is PII).
+    extra = {
+        "event": "chat_request",
         "session_id": session_id,
-        "sources": [chunk["source"] for chunk in chunks],
-        "found_in_kb": True,
+        "message_len": len(message),
+        "rewritten": search_query != message,
+        "top_score": round(float(chunks[0]["score"]), 4) if chunks else None,
+        "n_chunks": len(chunks),
+        "found_in_kb": result["found_in_kb"],
+        "latency_ms": round((time.perf_counter() - start) * 1000, 1),
     }
+    if LOG_QUERY_TEXT:
+        extra["query"] = message
+    log.info("chat request served", extra=extra)
+
+    return result
