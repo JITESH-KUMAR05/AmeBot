@@ -9,6 +9,8 @@
 #   8. Save both turns to session history
 #   9. Return structured response
 
+import string
+
 from openai import AzureOpenAI
 from config import (
     AZURE_OPENAI_API_KEY,
@@ -106,14 +108,18 @@ def _rewrite_query(message: str, history: list[dict]) -> str:
     The original message is still passed to the LLM so the conversation
     feels natural.
     """
-    # Pronouns and demonstratives that signal a follow-up question
-    FOLLOW_UP_WORDS = {
+    # Pronouns / demonstratives that signal a follow-up question.
+    # Both the set entries and the incoming tokens are stripped of
+    # surrounding punctuation so "it?", "it's" and "its" all match.
+    _RAW_FOLLOW_UP = {
         'it', 'its', 'they', 'their', 'them',
         'that', 'this', 'he', 'she', 'there',
-        'he\'s', 'she\'s', 'it\'s', 'they\'re',
+        "he's", "she's", "it's", "they're",
     }
+    _PUNCT = str.maketrans("", "", string.punctuation)
+    FOLLOW_UP_WORDS = {w.translate(_PUNCT) for w in _RAW_FOLLOW_UP}
 
-    words = set(message.lower().split())
+    words = {w.translate(_PUNCT) for w in message.lower().split()}
     is_follow_up = bool(words & FOLLOW_UP_WORDS)
 
     if is_follow_up and len(history) >= 1:
