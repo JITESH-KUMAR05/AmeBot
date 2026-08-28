@@ -28,7 +28,7 @@ FAISS_INDEX_PATH = "data/faiss_index"  ## faiss saves as folder
 # if the required data and api is not there or missing then crash it
 
 _required = {
-    "AZURE_OPENAI_KEY": AZURE_OPENAI_API_KEY,
+    "AZURE_OPENAI_API_KEY": AZURE_OPENAI_API_KEY,
     "AZURE_OPENAI_ENDPOINT": AZURE_OPENAI_ENDPOINT,
     "AZURE_OPENAI_DEPLOYMENT_NAME": AZURE_OPENAI_DEPLOYMENT_NAME,
     "AZURE_OPENAI_API_VERSION": AZURE_OPENAI_API_VERSION,
